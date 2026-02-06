@@ -11,7 +11,7 @@ on:
 
 env:
   NODE_VERSION: '20'
-  CODE_REPO: infixmn/magicpos-desktop
+  CODE_REPO: infixmn/pos.desktop
 
 jobs:
   build:
@@ -50,12 +50,45 @@ jobs:
       - name: Rebuild native modules
         run: npm run rebuild
 
+      # macOS only: import signing certificate into temp keychain
+      - name: Import Apple signing certificate
+        if: matrix.platform == 'darwin'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o $CERTIFICATE_PATH
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+          security import $CERTIFICATE_PATH -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+
+          security find-identity -p codesigning -v
+
       - name: Build application
         run: npm run ${{ matrix.make_cmd }}
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_WS_URL: ${{ vars.VITE_WS_URL }}
           VITE_UPDATE_URL: ${{ vars.VITE_UPDATE_URL }}
+          # macOS signing env vars (ignored on other platforms)
+          APPLE_SIGNING_ENABLED: ${{ matrix.platform == 'darwin' && 'true' || '' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # macOS only: cleanup keychain
+      - name: Cleanup keychain
+        if: matrix.platform == 'darwin' && always()
+        run: security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -89,7 +122,7 @@ jobs:
         run: |
           VERSION="${{ github.event.client_payload.version || github.event.inputs.version }}"
           TAG="v$VERSION"
-          
+
           gh release create "$TAG" ./release-files/* \
             --title "v$VERSION" \
             --notes "Release v$VERSION" \

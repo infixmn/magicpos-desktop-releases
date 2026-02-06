@@ -10,7 +10,7 @@ on:
         required: true
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   CODE_REPO: infixmn/pos.desktop
 
 jobs:
@@ -48,7 +48,7 @@ jobs:
         run: npm ci
 
       - name: Rebuild native modules
-        run: npm run rebuild
+        run: npm run rebuild:electron:electron
 
       # macOS only: import signing certificate into temp keychain
       - name: Import Apple signing certificate

@@ -48,7 +48,7 @@ jobs:
         run: npm ci
 
       - name: Rebuild native modules
-        run: npm run rebuild:electron:electron
+        run: npm run rebuild:electron
 
       # macOS only: import signing certificate into temp keychain
       - name: Import Apple signing certificate

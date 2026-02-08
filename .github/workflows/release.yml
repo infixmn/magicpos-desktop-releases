@@ -48,10 +48,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install dependencies (Linux)
+        if: matrix.platform == 'linux'
+        run: npm ci --ignore-scripts
+
+      - name: Install dependencies (Windows/macOS)
+        if: matrix.platform != 'linux'
         run: npm ci
-        env:
-          npm_config_ignore_scripts: ${{ matrix.platform == 'linux' && 'true' || '' }}
 
       - name: Rebuild native modules
         run: |
@@ -117,12 +120,11 @@ jobs:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_WS_URL: ${{ vars.VITE_WS_URL }}
           VITE_UPDATE_URL: ${{ vars.VITE_UPDATE_URL }}
-          # macOS signing env vars (ignored on other platforms)
+          # macOS: disable notarization during make, we'll do it separately
           APPLE_SIGNING_ENABLED: ${{ matrix.platform == 'darwin' && 'true' || '' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Increase notarization verbosity
           DEBUG: ${{ matrix.platform == 'darwin' && 'electron-notarize*,electron-osx-sign*' || '' }}
 
       # macOS only: cleanup keychain

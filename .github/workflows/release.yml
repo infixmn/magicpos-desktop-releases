@@ -52,7 +52,13 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Rebuild native modules
-        run: npm run rebuild:electron
+        run: |
+          if [ "${{ matrix.platform }}" = "linux" ]; then
+            npx electron-rebuild -f -w better-sqlite3
+          else
+            npm run rebuild:electron
+          fi
+        shell: bash
 
       # macOS only: import signing certificate into temp keychain
       - name: Import Apple signing certificate

@@ -56,6 +56,20 @@ jobs:
         if: matrix.platform != 'linux'
         run: npm ci
 
+      - name: Verify Squirrel vendor files (Windows)
+        if: matrix.platform == 'win32'
+        run: |
+          echo "Checking Squirrel vendor directory..."
+          $vendorPath = "node_modules\electron-winstaller\vendor"
+          if (Test-Path $vendorPath) {
+            Get-ChildItem $vendorPath -Recurse | Select-Object FullName
+          } else {
+            echo "WARNING: Vendor directory not found at $vendorPath"
+            echo "Listing electron-winstaller contents..."
+            Get-ChildItem "node_modules\electron-winstaller" -Recurse -Depth 2 | Select-Object FullName
+          }
+        shell: pwsh
+
       - name: Rebuild native modules
         run: |
           if [ "${{ matrix.platform }}" = "linux" ]; then
@@ -120,12 +134,54 @@ jobs:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_WS_URL: ${{ vars.VITE_WS_URL }}
           VITE_UPDATE_URL: ${{ vars.VITE_UPDATE_URL }}
-          # macOS: disable notarization during make, we'll do it separately
           APPLE_SIGNING_ENABLED: ${{ matrix.platform == 'darwin' && 'true' || '' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          DEBUG: ${{ matrix.platform == 'darwin' && 'electron-notarize*,electron-osx-sign*' || '' }}
+          SKIP_NOTARIZE: ${{ matrix.platform == 'darwin' && 'true' || '' }}
+          DEBUG: ${{ matrix.platform == 'darwin' && 'electron-osx-sign*' || '' }}
+
+      - name: Notarize macOS app
+        if: matrix.platform == 'darwin'
+        timeout-minutes: 45
+        run: |
+          echo "Finding .zip artifact for notarization..."
+          ZIP_FILE=$(find ./out/make -name "*.zip" -type f | head -1)
+          echo "Notarizing: $ZIP_FILE"
+
+          xcrun notarytool submit "$ZIP_FILE" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait --timeout 30m \
+            --output-format json | tee notarize-result.json
+
+          STATUS=$(cat notarize-result.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))")
+          echo "Notarization status: $STATUS"
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "Notarization failed with status: $STATUS"
+            ID=$(cat notarize-result.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
+            if [ -n "$ID" ]; then
+              xcrun notarytool log "$ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID"
+            fi
+            exit 1
+          fi
+
+          echo "Notarization accepted!"
+
+          DMG_FILE=$(find ./out/make -name "*.dmg" -type f | head -1)
+          if [ -n "$DMG_FILE" ]; then
+            echo "Stapling notarization ticket to DMG..."
+            xcrun stapler staple "$DMG_FILE"
+          fi
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       # macOS only: cleanup keychain
       - name: Cleanup keychain

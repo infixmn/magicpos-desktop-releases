@@ -145,39 +145,61 @@ jobs:
         if: matrix.platform == 'darwin'
         timeout-minutes: 45
         run: |
-          echo "Finding .zip artifact for notarization..."
+          echo "Finding artifacts for notarization..."
           ZIP_FILE=$(find ./out/make -name "*.zip" -type f | head -1)
-          echo "Notarizing: $ZIP_FILE"
+          echo "Found zip: $ZIP_FILE"
 
-          xcrun notarytool submit "$ZIP_FILE" \
+          echo "Submitting to Apple for notarization..."
+          SUBMIT_OUTPUT=$(xcrun notarytool submit "$ZIP_FILE" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait --timeout 30m \
-            --output-format json | tee notarize-result.json
+            --output-format json 2>&1) || true
 
-          STATUS=$(cat notarize-result.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','unknown'))")
-          echo "Notarization status: $STATUS"
+          echo "Submit output: $SUBMIT_OUTPUT"
 
-          if [ "$STATUS" != "Accepted" ]; then
-            echo "Notarization failed with status: $STATUS"
-            ID=$(cat notarize-result.json | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))")
-            if [ -n "$ID" ]; then
-              xcrun notarytool log "$ID" \
-                --apple-id "$APPLE_ID" \
-                --password "$APPLE_PASSWORD" \
-                --team-id "$APPLE_TEAM_ID"
-            fi
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
+
+          if [ -z "$SUBMISSION_ID" ]; then
+            echo "ERROR: Failed to get submission ID"
+            echo "$SUBMIT_OUTPUT"
             exit 1
           fi
 
-          echo "Notarization accepted!"
+          echo "Submission ID: $SUBMISSION_ID"
+          echo "Waiting for notarization result (polling every 30s)..."
 
-          DMG_FILE=$(find ./out/make -name "*.dmg" -type f | head -1)
-          if [ -n "$DMG_FILE" ]; then
-            echo "Stapling notarization ticket to DMG..."
-            xcrun stapler staple "$DMG_FILE"
-          fi
+          for i in $(seq 1 60); do
+            sleep 30
+            WAIT_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --password "$APPLE_PASSWORD" \
+              --team-id "$APPLE_TEAM_ID" \
+              --output-format json 2>&1) || true
+
+            STATUS=$(echo "$WAIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','In Progress'))" 2>/dev/null || echo "In Progress")
+            echo "[$((i * 30))s] Status: $STATUS"
+
+            if [ "$STATUS" = "Accepted" ]; then
+              echo "Notarization accepted!"
+              DMG_FILE=$(find ./out/make -name "*.dmg" -type f | head -1)
+              if [ -n "$DMG_FILE" ]; then
+                echo "Stapling ticket to DMG..."
+                xcrun stapler staple "$DMG_FILE"
+              fi
+              exit 0
+            elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
+              echo "Notarization failed: $STATUS"
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" || true
+              exit 1
+            fi
+          done
+
+          echo "ERROR: Notarization did not complete within 30 minutes"
+          exit 1
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}

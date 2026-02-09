@@ -143,11 +143,12 @@ jobs:
 
       - name: Notarize macOS app
         if: matrix.platform == 'darwin'
-        timeout-minutes: 45
+        timeout-minutes: 75
         run: |
           echo "Finding artifacts for notarization..."
           ZIP_FILE=$(find ./out/make -name "*.zip" -type f | head -1)
           echo "Found zip: $ZIP_FILE"
+          echo "File size: $(du -h "$ZIP_FILE" | cut -f1)"
 
           echo "Submitting to Apple for notarization..."
           SUBMIT_OUTPUT=$(xcrun notarytool submit "$ZIP_FILE" \
@@ -167,10 +168,10 @@ jobs:
           fi
 
           echo "Submission ID: $SUBMISSION_ID"
-          echo "Waiting for notarization result (polling every 30s)..."
+          echo "Waiting for notarization result (polling every 60s, up to 60 min)..."
 
           for i in $(seq 1 60); do
-            sleep 30
+            sleep 60
             WAIT_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
               --apple-id "$APPLE_ID" \
               --password "$APPLE_PASSWORD" \
@@ -178,7 +179,7 @@ jobs:
               --output-format json 2>&1) || true
 
             STATUS=$(echo "$WAIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','In Progress'))" 2>/dev/null || echo "In Progress")
-            echo "[$((i * 30))s] Status: $STATUS"
+            echo "[$((i))min] Status: $STATUS"
 
             if [ "$STATUS" = "Accepted" ]; then
               echo "Notarization accepted!"
@@ -198,7 +199,7 @@ jobs:
             fi
           done
 
-          echo "ERROR: Notarization did not complete within 30 minutes"
+          echo "ERROR: Notarization did not complete within 60 minutes"
           exit 1
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}

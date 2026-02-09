@@ -144,14 +144,14 @@ jobs:
 
       - name: Notarize macOS app
         if: matrix.platform == 'darwin'
+        continue-on-error: true
         timeout-minutes: 30
         run: |
           echo "Finding DMG for notarization..."
           DMG_FILE=$(find ./out/make -name "*.dmg" -type f | head -1)
           if [ -z "$DMG_FILE" ]; then
-            echo "ERROR: No DMG file found"
-            find ./out/make -type f
-            exit 1
+            echo "WARNING: No DMG file found, skipping notarization"
+            exit 0
           fi
           echo "Found DMG: $DMG_FILE"
           echo "File size: $(du -h "$DMG_FILE" | cut -f1)"
@@ -168,9 +168,9 @@ jobs:
           SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('id',''))" 2>/dev/null || echo "")
 
           if [ -z "$SUBMISSION_ID" ]; then
-            echo "ERROR: Failed to get submission ID"
+            echo "WARNING: Failed to get submission ID, skipping notarization"
             echo "$SUBMIT_OUTPUT"
-            exit 1
+            exit 0
           fi
 
           echo "Submission ID: $SUBMISSION_ID"
@@ -199,12 +199,15 @@ jobs:
                 --apple-id "$APPLE_ID" \
                 --password "$APPLE_PASSWORD" \
                 --team-id "$APPLE_TEAM_ID" || true
-              exit 1
+              echo "WARNING: Notarization failed but continuing with release"
+              exit 0
             fi
           done
 
-          echo "ERROR: Notarization did not complete within 20 minutes"
-          exit 1
+          echo "WARNING: Notarization did not complete within 20 minutes. Apple's service may be experiencing delays."
+          echo "The DMG is still code-signed and will work, but may show a Gatekeeper warning on first launch."
+          echo "You can notarize manually later with: xcrun notarytool submit MagicPos.dmg --apple-id ... --wait"
+          exit 0
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}

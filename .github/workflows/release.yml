@@ -145,7 +145,7 @@ jobs:
       - name: Notarize macOS app
         if: matrix.platform == 'darwin'
         continue-on-error: true
-        timeout-minutes: 30
+        timeout-minutes: 120
         run: |
           echo "Finding DMG for notarization..."
           DMG_FILE=$(find ./out/make -name "*.dmg" -type f | head -1)
@@ -174,9 +174,9 @@ jobs:
           fi
 
           echo "Submission ID: $SUBMISSION_ID"
-          echo "Waiting for notarization result (polling every 30s, up to 20 min)..."
+          echo "Waiting for notarization result (polling every 30s, up to 2 hours)..."
 
-          for i in $(seq 1 40); do
+          for i in $(seq 1 240); do
             sleep 30
             WAIT_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
               --apple-id "$APPLE_ID" \
@@ -204,7 +204,7 @@ jobs:
             fi
           done
 
-          echo "WARNING: Notarization did not complete within 20 minutes. Apple's service may be experiencing delays."
+          echo "WARNING: Notarization did not complete within 2 hours. Apple's service may be experiencing delays."
           echo "The DMG is still code-signed and will work, but may show a Gatekeeper warning on first launch."
           echo "You can notarize manually later with: xcrun notarytool submit MagicPos.dmg --apple-id ... --wait"
           exit 0
@@ -233,6 +233,8 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Download all artifacts

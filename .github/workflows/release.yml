@@ -144,15 +144,20 @@ jobs:
 
       - name: Notarize macOS app
         if: matrix.platform == 'darwin'
-        timeout-minutes: 75
+        timeout-minutes: 30
         run: |
-          echo "Finding artifacts for notarization..."
-          ZIP_FILE=$(find ./out/make -name "*.zip" -type f | head -1)
-          echo "Found zip: $ZIP_FILE"
-          echo "File size: $(du -h "$ZIP_FILE" | cut -f1)"
+          echo "Finding DMG for notarization..."
+          DMG_FILE=$(find ./out/make -name "*.dmg" -type f | head -1)
+          if [ -z "$DMG_FILE" ]; then
+            echo "ERROR: No DMG file found"
+            find ./out/make -type f
+            exit 1
+          fi
+          echo "Found DMG: $DMG_FILE"
+          echo "File size: $(du -h "$DMG_FILE" | cut -f1)"
 
-          echo "Submitting to Apple for notarization..."
-          SUBMIT_OUTPUT=$(xcrun notarytool submit "$ZIP_FILE" \
+          echo "Submitting DMG to Apple for notarization..."
+          SUBMIT_OUTPUT=$(xcrun notarytool submit "$DMG_FILE" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
@@ -169,10 +174,10 @@ jobs:
           fi
 
           echo "Submission ID: $SUBMISSION_ID"
-          echo "Waiting for notarization result (polling every 60s, up to 60 min)..."
+          echo "Waiting for notarization result (polling every 30s, up to 20 min)..."
 
-          for i in $(seq 1 60); do
-            sleep 60
+          for i in $(seq 1 40); do
+            sleep 30
             WAIT_OUTPUT=$(xcrun notarytool info "$SUBMISSION_ID" \
               --apple-id "$APPLE_ID" \
               --password "$APPLE_PASSWORD" \
@@ -180,15 +185,13 @@ jobs:
               --output-format json 2>&1) || true
 
             STATUS=$(echo "$WAIT_OUTPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','In Progress'))" 2>/dev/null || echo "In Progress")
-            echo "[$((i))min] Status: $STATUS"
+            echo "[$((i*30))s] Status: $STATUS"
 
             if [ "$STATUS" = "Accepted" ]; then
               echo "Notarization accepted!"
-              DMG_FILE=$(find ./out/make -name "*.dmg" -type f | head -1)
-              if [ -n "$DMG_FILE" ]; then
-                echo "Stapling ticket to DMG..."
-                xcrun stapler staple "$DMG_FILE"
-              fi
+              echo "Stapling ticket to DMG..."
+              xcrun stapler staple "$DMG_FILE"
+              echo "DMG notarized and stapled successfully."
               exit 0
             elif [ "$STATUS" = "Invalid" ] || [ "$STATUS" = "Rejected" ]; then
               echo "Notarization failed: $STATUS"
@@ -200,7 +203,7 @@ jobs:
             fi
           done
 
-          echo "ERROR: Notarization did not complete within 60 minutes"
+          echo "ERROR: Notarization did not complete within 20 minutes"
           exit 1
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}

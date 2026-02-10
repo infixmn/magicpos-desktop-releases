@@ -410,3 +410,26 @@ jobs:
             --repo ${{ github.repository }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify all POS clients via API
+        continue-on-error: true
+        run: |
+          VERSION="${{ github.event.client_payload.version || github.event.inputs.version }}"
+          echo "Broadcasting update v$VERSION to all POS clients..."
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "${{ vars.VITE_API_URL }}/api/v1/app_updates/broadcast" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.API_DEPLOY_TOKEN }}" \
+            -d "{\"version\":\"$VERSION\"}")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+            echo "All POS clients notified of v$VERSION"
+          else
+            echo "WARNING: Failed to notify POS clients (HTTP $HTTP_CODE)"
+            echo "$BODY"
+            echo "POS clients will still pick up the update via hourly polling"
+          fi

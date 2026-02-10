@@ -256,11 +256,51 @@ jobs:
         with:
           path: ./artifacts
 
-      - name: Organize artifacts
+      - name: Organize and rename artifacts
         run: |
+          VERSION="${{ github.event.client_payload.version || github.event.inputs.version }}"
           mkdir -p ./release-files
-          find ./artifacts -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.exe" -o -name "*.deb" -o -name "*.AppImage" \) -exec cp {} ./release-files/ \;
-          echo "Release files:" && ls -la ./release-files/
+
+          # Naming convention: MagicPos-{version}-{platform}-{arch}.{ext}
+
+          # macOS DMG (arm64 from macos-14 runner)
+          DMG=$(find ./artifacts/build-darwin -name "*.dmg" -type f | head -1)
+          if [ -n "$DMG" ]; then
+            cp "$DMG" "./release-files/MagicPos-${VERSION}-mac-arm64.dmg"
+          fi
+
+          # macOS ZIP
+          MAC_ZIP=$(find ./artifacts/build-darwin -name "*.zip" -type f | head -1)
+          if [ -n "$MAC_ZIP" ]; then
+            cp "$MAC_ZIP" "./release-files/MagicPos-${VERSION}-mac-arm64.zip"
+          fi
+
+          # Windows EXE (Squirrel installer)
+          WIN_EXE=$(find ./artifacts/build-win32 -name "*.exe" -type f | head -1)
+          if [ -n "$WIN_EXE" ]; then
+            cp "$WIN_EXE" "./release-files/MagicPos-${VERSION}-win-x64.exe"
+          fi
+
+          # Windows ZIP
+          WIN_ZIP=$(find ./artifacts/build-win32 -name "*.zip" -type f | head -1)
+          if [ -n "$WIN_ZIP" ]; then
+            cp "$WIN_ZIP" "./release-files/MagicPos-${VERSION}-win-x64.zip"
+          fi
+
+          # Linux DEB
+          DEB=$(find ./artifacts/build-linux -name "*.deb" -type f | head -1)
+          if [ -n "$DEB" ]; then
+            cp "$DEB" "./release-files/MagicPos-${VERSION}-linux-x64.deb"
+          fi
+
+          # Linux AppImage
+          APPIMAGE=$(find ./artifacts/build-linux -name "*.AppImage" -type f | head -1)
+          if [ -n "$APPIMAGE" ]; then
+            cp "$APPIMAGE" "./release-files/MagicPos-${VERSION}-linux-x64.AppImage"
+          fi
+
+          echo "Release files:"
+          ls -la ./release-files/
 
       - name: Generate update manifests
         run: |
@@ -281,9 +321,10 @@ jobs:
           ls -la ./platform-artifacts/win32/ 2>/dev/null || echo "  No win32 artifacts"
           ls -la ./platform-artifacts/linux/ 2>/dev/null || echo "  No linux artifacts"
 
-          # Try to download previous release's update tars for delta patches
-          PREV_TAG=""
-          PREV_TAG=$(gh release list --repo "$REPO" --limit 5 --json tagName --jq '.[].tagName' | grep -v "v${VERSION}" | head -1) || true
+          # Get last 3 previous releases for delta patches
+          PREV_TAGS=""
+          PREV_TAGS=$(gh release list --repo "$REPO" --limit 10 --json tagName --jq '.[].tagName' | grep -v "v${VERSION}" | head -3) || true
+          echo "Previous releases for patching: $PREV_TAGS"
 
           # Generate manifest for each platform
           for PLATFORM in darwin win32 linux; do
@@ -291,30 +332,45 @@ jobs:
               echo ""
               echo "=== Generating update for $PLATFORM ==="
 
-              PATCH_ARGS=""
-              if [ -n "$PREV_TAG" ]; then
-                echo "Previous release: $PREV_TAG — checking for old tar..."
-                OLD_TAR="${PREV_TAG#v}.${PLATFORM}.tar"
-                mkdir -p ./old-artifacts/$PLATFORM
-                gh release download "$PREV_TAG" --repo "$REPO" --pattern "$OLD_TAR" --dir ./old-artifacts/$PLATFORM 2>/dev/null || true
-
-                if [ -f "./old-artifacts/$PLATFORM/$OLD_TAR" ]; then
-                  echo "Found old tar: $OLD_TAR — will generate delta patch"
-                  # We need to extract the old tar to a temp dir so generate-patch can find the bundle
-                  mkdir -p ./old-extracted/$PLATFORM
-                  tar -xf "./old-artifacts/$PLATFORM/$OLD_TAR" -C ./old-extracted/$PLATFORM
-                  PATCH_ARGS="--old ./old-extracted/$PLATFORM"
-                else
-                  echo "No old tar found for $PLATFORM, generating full release only"
-                fi
-              fi
-
+              # First run: generate full tar + manifest (no --old)
               npx tsx scripts/generate-patch.ts \
                 --new ./platform-artifacts/$PLATFORM \
                 --platform $PLATFORM \
                 --output ./update-files/$PLATFORM \
-                --flat-urls \
-                $PATCH_ARGS || echo "WARNING: Failed to generate update for $PLATFORM"
+                --flat-urls || echo "WARNING: Failed to generate full release for $PLATFORM"
+
+              # Then generate delta patches from each of the last 3 versions
+              if [ -n "$PREV_TAGS" ]; then
+                for PREV_TAG in $PREV_TAGS; do
+                  PREV_VER="${PREV_TAG#v}"
+                  # Match new naming: MagicPos-{version}-{platform}-{arch}.tar
+                  if [ "$PLATFORM" = "darwin" ]; then
+                    OLD_TAR="MagicPos-${PREV_VER}-mac-arm64.tar"
+                  elif [ "$PLATFORM" = "win32" ]; then
+                    OLD_TAR="MagicPos-${PREV_VER}-win-x64.tar"
+                  else
+                    OLD_TAR="MagicPos-${PREV_VER}-linux-x64.tar"
+                  fi
+                  mkdir -p ./old-artifacts/$PLATFORM/$PREV_TAG
+                  echo "Checking $PREV_TAG for $PLATFORM tar ($OLD_TAR)..."
+                  gh release download "$PREV_TAG" --repo "$REPO" --pattern "$OLD_TAR" --dir ./old-artifacts/$PLATFORM/$PREV_TAG 2>/dev/null || true
+
+                  if [ -f "./old-artifacts/$PLATFORM/$PREV_TAG/$OLD_TAR" ]; then
+                    echo "Found $OLD_TAR — generating delta patch from $PREV_TAG"
+                    mkdir -p ./old-extracted/$PLATFORM/$PREV_TAG
+                    tar -xf "./old-artifacts/$PLATFORM/$PREV_TAG/$OLD_TAR" -C ./old-extracted/$PLATFORM/$PREV_TAG
+
+                    npx tsx scripts/generate-patch.ts \
+                      --new ./platform-artifacts/$PLATFORM \
+                      --old ./old-extracted/$PLATFORM/$PREV_TAG \
+                      --platform $PLATFORM \
+                      --output ./update-files/$PLATFORM \
+                      --flat-urls || echo "WARNING: Failed to generate patch from $PREV_TAG for $PLATFORM"
+                  else
+                    echo "No tar found for $PLATFORM in $PREV_TAG, skipping"
+                  fi
+                done
+              fi
             fi
           done
 

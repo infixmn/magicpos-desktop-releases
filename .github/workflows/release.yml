@@ -418,7 +418,7 @@ jobs:
           echo "Broadcasting update v$VERSION to all POS clients..."
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "${{ vars.VITE_API_URL }}/api/v1/app_updates/broadcast" \
+            "${{ vars.VITE_API_URL }}/api/app_updates/broadcast" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${{ secrets.API_DEPLOY_TOKEN }}" \
             -d "{\"version\":\"$VERSION\"}")

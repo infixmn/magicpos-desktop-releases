@@ -133,6 +133,8 @@ jobs:
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_WS_URL: ${{ vars.VITE_WS_URL }}
+          VITE_CLIENT_ID: ${{ vars.VITE_CLIENT_ID }}
+          VITE_CLIENT_SECRET: ${{ secrets.VITE_CLIENT_SECRET }}
           ELECTRON_FORGE_SKIP_REBUILD: ${{ matrix.platform == 'linux' && 'true' || '' }}
           VITE_UPDATE_URL: ${{ vars.VITE_UPDATE_URL }}
           APPLE_SIGNING_ENABLED: ${{ matrix.platform == 'darwin' && 'true' || '' }}

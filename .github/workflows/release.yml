@@ -322,7 +322,7 @@ jobs:
 
           # Copy platform-specific files
           find ./artifacts/build-darwin -type f \( -name "*.dmg" -o -name "*.zip" \) -exec cp {} ./platform-artifacts/darwin/ \; 2>/dev/null || true
-          find ./artifacts/build-win32 -type f \( -name "*.exe" -o -name "*.nupkg" \) -exec cp {} ./platform-artifacts/win32/ \; 2>/dev/null || true
+          find ./artifacts/build-win32 -type f \( -name "*.exe" -o -name "*.zip" -o -name "*.nupkg" \) -exec cp {} ./platform-artifacts/win32/ \; 2>/dev/null || true
           find ./artifacts/build-linux -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec cp {} ./platform-artifacts/linux/ \; 2>/dev/null || true
 
           echo "Platform artifacts:"

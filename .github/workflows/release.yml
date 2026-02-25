@@ -167,7 +167,12 @@ jobs:
 
       - name: Build application
         timeout-minutes: 30
-        run: npm run ${{ matrix.make_cmd }}
+        run: |
+          # Set SOURCE_DATE_EPOCH for reproducible builds
+          export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
+          echo "SOURCE_DATE_EPOCH=$SOURCE_DATE_EPOCH ($(date -u -d @$SOURCE_DATE_EPOCH 2>/dev/null || date -u -r $SOURCE_DATE_EPOCH))"
+          npm run ${{ matrix.make_cmd }}
+        shell: bash
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_WS_URL: ${{ vars.VITE_WS_URL }}

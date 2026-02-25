@@ -60,11 +60,11 @@ jobs:
         if: matrix.platform == 'darwin'
         run: |
           brew install xdelta
-          mkdir -p resources/bin
-          cp /opt/homebrew/bin/xdelta3 resources/bin/xdelta3-darwin-arm64
-          chmod +x resources/bin/xdelta3-darwin-arm64
-          echo "Bundled xdelta3 for macOS ARM64"
+          chmod +x scripts/bundle-xdelta3-mac.sh
+          ./scripts/bundle-xdelta3-mac.sh
+          echo "Bundled xdelta3 for macOS ARM64 with dependencies"
           ls -lh resources/bin/
+          ls -lh resources/lib/
 
       - name: Bundle xdelta3 binary (Windows)
         if: matrix.platform == 'win32'
@@ -87,12 +87,12 @@ jobs:
       - name: Bundle xdelta3 binary (Linux)
         if: matrix.platform == 'linux'
         run: |
-          sudo apt-get update && sudo apt-get install -y xdelta3
-          mkdir -p resources/bin
-          cp /usr/bin/xdelta3 resources/bin/xdelta3-linux-x64
-          chmod +x resources/bin/xdelta3-linux-x64
-          echo "Bundled xdelta3 for Linux x64"
+          sudo apt-get update && sudo apt-get install -y xdelta3 patchelf
+          chmod +x scripts/bundle-xdelta3-linux.sh
+          ./scripts/bundle-xdelta3-linux.sh
+          echo "Bundled xdelta3 for Linux x64 with dependencies"
           ls -lh resources/bin/
+          ls -lh resources/lib/
 
       - name: Verify Squirrel vendor files (Windows)
         if: matrix.platform == 'win32'

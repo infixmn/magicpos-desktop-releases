@@ -56,6 +56,44 @@ jobs:
         if: matrix.platform != 'linux'
         run: npm ci
 
+      - name: Bundle xdelta3 binary (macOS)
+        if: matrix.platform == 'darwin'
+        run: |
+          brew install xdelta
+          mkdir -p resources/bin
+          cp /opt/homebrew/bin/xdelta3 resources/bin/xdelta3-darwin-arm64
+          chmod +x resources/bin/xdelta3-darwin-arm64
+          echo "Bundled xdelta3 for macOS ARM64"
+          ls -lh resources/bin/
+
+      - name: Bundle xdelta3 binary (Windows)
+        if: matrix.platform == 'win32'
+        run: |
+          # Download xdelta3 for Windows
+          $url = "https://github.com/jmacd/xdelta/releases/download/v3.1.0/xdelta3-3.1.0-x86_64.exe.zip"
+          $zipPath = "$env:TEMP\xdelta3.zip"
+          $extractPath = "$env:TEMP\xdelta3"
+          
+          Invoke-WebRequest -Uri $url -OutFile $zipPath
+          Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+          
+          New-Item -ItemType Directory -Force -Path "resources\bin"
+          Copy-Item "$extractPath\xdelta3-3.1.0-x86_64.exe" "resources\bin\xdelta3-win-x64.exe"
+          
+          Write-Host "Bundled xdelta3 for Windows x64"
+          Get-ChildItem resources\bin
+        shell: pwsh
+
+      - name: Bundle xdelta3 binary (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update && sudo apt-get install -y xdelta3
+          mkdir -p resources/bin
+          cp /usr/bin/xdelta3 resources/bin/xdelta3-linux-x64
+          chmod +x resources/bin/xdelta3-linux-x64
+          echo "Bundled xdelta3 for Linux x64"
+          ls -lh resources/bin/
+
       - name: Verify Squirrel vendor files (Windows)
         if: matrix.platform == 'win32'
         run: |
@@ -246,7 +284,7 @@ jobs:
         shell: bash
 
       - name: Install system dependencies (for native modules)
-        run: sudo apt-get update && sudo apt-get install -y python3 make g++ libudev-dev libusb-1.0-0-dev bsdiff
+        run: sudo apt-get update && sudo apt-get install -y python3 make g++ libudev-dev libusb-1.0-0-dev xdelta3
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -256,9 +294,6 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --ignore-scripts
-
-      - name: Rebuild bsdiff-node
-        run: npm rebuild bsdiff-node
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4

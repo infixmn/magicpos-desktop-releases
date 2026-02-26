@@ -268,12 +268,14 @@ jobs:
         with:
           name: build-${{ matrix.platform }}
           path: |
-            ./out/make/**/*.dmg
-            ./out/make/**/*.zip
-            ./out/make/**/*.exe
-            ./out/make/**/*.deb
-            ./out/make/**/*.AppImage
+            out/make/**/*.dmg
+            out/make/**/*.zip
+            out/make/**/*.exe
+            out/make/**/*.deb
+            out/make/**/*.AppImage
           retention-days: 5
+          include-hidden-files: true
+          path-type: 'glob'
 
   publish:
     needs: build
@@ -362,25 +364,25 @@ jobs:
           PREV_TAGS=$(gh release list --repo "$REPO" --limit 10 --json tagName --jq '.[].tagName' | grep -v "v${VERSION}" | head -3) || true
           echo "Previous releases for patching: $PREV_TAGS"
 
-          # Extract New Version artifacts for patching (must use actual directories, not installers)
+          # Extract New Version artifacts for patching
           echo "Extracting new version artifacts..."
           mkdir -p ./new-extracted/darwin ./new-extracted/win32 ./new-extracted/linux
-          
-          # MacOS
+          mkdir -p ./platform-artifacts/linux
+
+          # MacOS ZIP
           MAC_ZIP=$(find ./artifacts/build-darwin -name "*.zip" -type f | head -1)
           if [ -n "$MAC_ZIP" ]; then
-            unzip -q "$MAC_ZIP" -d ./new-extracted/darwin/
+            unzip -qo "$MAC_ZIP" -d ./new-extracted/darwin/ || true
           fi
           
-          # Windows
+          # Windows ZIP (Portable)
           WIN_ZIP=$(find ./artifacts/build-win32 -name "*.zip" -type f | head -1)
           if [ -n "$WIN_ZIP" ]; then
-            unzip -q "$WIN_ZIP" -d ./new-extracted/win32/
+            unzip -qo "$WIN_ZIP" -d ./new-extracted/win32/ || true
           fi
           
-          # Linux
-          # For Linux, AppImage is a single file, so we can use it directly as handled by findAppBundle
-          # but we need it in platform-artifacts
+          # Linux AppImage
+          # For Linux, findAppBundle handles the AppImage file directly
           find ./artifacts/build-linux -type f -name "*.AppImage" -exec cp {} ./platform-artifacts/linux/ \; 2>/dev/null || true
 
           # Generate manifest for each platform

@@ -275,11 +275,11 @@ jobs:
             out/make/**/*.AppImage
           retention-days: 5
           include-hidden-files: true
-          path-type: 'glob'
 
   publish:
     needs: build
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
 

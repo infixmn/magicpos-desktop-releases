@@ -357,33 +357,48 @@ jobs:
           REPO="${{ github.repository }}"
           mkdir -p ./update-files
 
-          # Organize platform artifacts into separate dirs for generate-patch
-          mkdir -p ./platform-artifacts/darwin ./platform-artifacts/win32 ./platform-artifacts/linux
-
-          # Copy platform-specific files
-          find ./artifacts/build-darwin -type f \( -name "*.dmg" -o -name "*.zip" \) -exec cp {} ./platform-artifacts/darwin/ \; 2>/dev/null || true
-          find ./artifacts/build-win32 -type f \( -name "*.exe" -o -name "*.zip" -o -name "*.nupkg" \) -exec cp {} ./platform-artifacts/win32/ \; 2>/dev/null || true
-          find ./artifacts/build-linux -type f \( -name "*.deb" -o -name "*.AppImage" \) -exec cp {} ./platform-artifacts/linux/ \; 2>/dev/null || true
-
-          echo "Platform artifacts:"
-          ls -la ./platform-artifacts/darwin/ 2>/dev/null || echo "  No darwin artifacts"
-          ls -la ./platform-artifacts/win32/ 2>/dev/null || echo "  No win32 artifacts"
-          ls -la ./platform-artifacts/linux/ 2>/dev/null || echo "  No linux artifacts"
-
           # Get last 3 previous releases for delta patches
           PREV_TAGS=""
           PREV_TAGS=$(gh release list --repo "$REPO" --limit 10 --json tagName --jq '.[].tagName' | grep -v "v${VERSION}" | head -3) || true
           echo "Previous releases for patching: $PREV_TAGS"
 
+          # Extract New Version artifacts for patching (must use actual directories, not installers)
+          echo "Extracting new version artifacts..."
+          mkdir -p ./new-extracted/darwin ./new-extracted/win32 ./new-extracted/linux
+          
+          # MacOS
+          MAC_ZIP=$(find ./artifacts/build-darwin -name "*.zip" -type f | head -1)
+          if [ -n "$MAC_ZIP" ]; then
+            unzip -q "$MAC_ZIP" -d ./new-extracted/darwin/
+          fi
+          
+          # Windows
+          WIN_ZIP=$(find ./artifacts/build-win32 -name "*.zip" -type f | head -1)
+          if [ -n "$WIN_ZIP" ]; then
+            unzip -q "$WIN_ZIP" -d ./new-extracted/win32/
+          fi
+          
+          # Linux
+          # For Linux, AppImage is a single file, so we can use it directly as handled by findAppBundle
+          # but we need it in platform-artifacts
+          find ./artifacts/build-linux -type f -name "*.AppImage" -exec cp {} ./platform-artifacts/linux/ \; 2>/dev/null || true
+
           # Generate manifest for each platform
           for PLATFORM in darwin win32 linux; do
-            if [ -d "./platform-artifacts/$PLATFORM" ] && [ "$(ls -A ./platform-artifacts/$PLATFORM 2>/dev/null)" ]; then
+            # Define where to look for the "new" version
+            if [ "$PLATFORM" = "linux" ]; then
+              NEW_SOURCE="./platform-artifacts/linux"
+            else
+              NEW_SOURCE="./new-extracted/$PLATFORM"
+            fi
+
+            if ([ -d "$NEW_SOURCE" ] && [ "$(ls -A "$NEW_SOURCE" 2>/dev/null)" ]); then
               echo ""
               echo "=== Generating update for $PLATFORM ==="
 
               # First run: generate full tar + manifest (no --old)
               npx tsx scripts/generate-patch.ts \
-                --new ./platform-artifacts/$PLATFORM \
+                --new "$NEW_SOURCE" \
                 --platform $PLATFORM \
                 --output ./update-files/$PLATFORM \
                 --flat-urls || echo "WARNING: Failed to generate full release for $PLATFORM"
@@ -410,7 +425,7 @@ jobs:
                     tar -xf "./old-artifacts/$PLATFORM/$PREV_TAG/$OLD_TAR" -C ./old-extracted/$PLATFORM/$PREV_TAG
 
                     npx tsx scripts/generate-patch.ts \
-                      --new ./platform-artifacts/$PLATFORM \
+                      --new "$NEW_SOURCE" \
                       --old ./old-extracted/$PLATFORM/$PREV_TAG \
                       --platform $PLATFORM \
                       --output ./update-files/$PLATFORM \

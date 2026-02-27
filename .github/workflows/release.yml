@@ -431,7 +431,8 @@ jobs:
                   if [ -f "./old-artifacts/$PLATFORM/$PREV_TAG/$OLD_TAR" ]; then
                     echo "Found $OLD_TAR — generating delta patch from $PREV_TAG"
                     mkdir -p ./old-extracted/$PLATFORM/$PREV_TAG
-                    tar -xf "./old-artifacts/$PLATFORM/$PREV_TAG/$OLD_TAR" -C ./old-extracted/$PLATFORM/$PREV_TAG
+                    # Use our deterministic extractor instead of tar (since it's a DPA bundle)
+                    npx tsx scripts/generate-patch.ts --extract "./old-artifacts/$PLATFORM/$PREV_TAG/$OLD_TAR" --to ./old-extracted/$PLATFORM/$PREV_TAG
 
                     npx tsx scripts/generate-patch.ts \
                       --new "$NEW_SOURCE" \

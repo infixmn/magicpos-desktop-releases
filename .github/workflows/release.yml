@@ -73,13 +73,13 @@ jobs:
           $url = "https://github.com/jmacd/xdelta-gpl/releases/download/v3.1.0/xdelta3-3.1.0-x86_64.exe.zip"
           $zipPath = "$env:TEMP\xdelta3.zip"
           $extractPath = "$env:TEMP\xdelta3"
-          
+
           Invoke-WebRequest -Uri $url -OutFile $zipPath
           Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
-          
+
           New-Item -ItemType Directory -Force -Path "resources\bin"
           Copy-Item "$extractPath\xdelta3-3.1.0-x86_64.exe" "resources\bin\xdelta3-win-x64.exe"
-          
+
           Write-Host "Bundled xdelta3 for Windows x64"
           Get-ChildItem resources\bin
         shell: pwsh
@@ -350,6 +350,12 @@ jobs:
             cp "$APPIMAGE" "./release-files/MagicPos-${VERSION}-linux-x64.AppImage"
           fi
 
+          # Linux ZIP
+          LINUX_ZIP=$(find ./artifacts/build-linux -name "*.zip" -type f | head -1)
+          if [ -n "$LINUX_ZIP" ]; then
+            cp "$LINUX_ZIP" "./release-files/MagicPos-${VERSION}-linux-x64.zip"
+          fi
+
           echo "Release files:"
           ls -la ./release-files/
 
@@ -374,25 +380,26 @@ jobs:
           if [ -n "$MAC_ZIP" ]; then
             unzip -qo "$MAC_ZIP" -d ./new-extracted/darwin/ || true
           fi
-          
+
           # Windows ZIP (Portable)
           WIN_ZIP=$(find ./artifacts/build-win32 -name "*.zip" -type f | head -1)
           if [ -n "$WIN_ZIP" ]; then
             unzip -qo "$WIN_ZIP" -d ./new-extracted/win32/ || true
           fi
           
-          # Linux AppImage
-          # For Linux, findAppBundle handles the AppImage file directly
+          # Linux ZIP
+          LIN_ZIP=$(find ./artifacts/build-linux -name "*.zip" -type f | head -1)
+          if [ -n "$LIN_ZIP" ]; then
+            unzip -qo "$LIN_ZIP" -d ./new-extracted/linux/ || true
+          fi
+
+          # Linux AppImage (fallback for display)
           find ./artifacts/build-linux -type f -name "*.AppImage" -exec cp {} ./platform-artifacts/linux/ \; 2>/dev/null || true
 
           # Generate manifest for each platform
           for PLATFORM in darwin win32 linux; do
             # Define where to look for the "new" version
-            if [ "$PLATFORM" = "linux" ]; then
-              NEW_SOURCE="./platform-artifacts/linux"
-            else
-              NEW_SOURCE="./new-extracted/$PLATFORM"
-            fi
+            NEW_SOURCE="./new-extracted/$PLATFORM"
 
             if ([ -d "$NEW_SOURCE" ] && [ "$(ls -A "$NEW_SOURCE" 2>/dev/null)" ]); then
               echo ""

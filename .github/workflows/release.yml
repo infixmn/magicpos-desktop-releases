@@ -410,7 +410,7 @@ jobs:
                 --new "$NEW_SOURCE" \
                 --platform $PLATFORM \
                 --output ./update-files/$PLATFORM \
-                --flat-urls || echo "WARNING: Failed to generate full release for $PLATFORM"
+                --flat-urls
 
               # Then generate delta patches from each of the last 3 versions
               if [ -n "$PREV_TAGS" ]; then
@@ -440,7 +440,7 @@ jobs:
                       --old ./old-extracted/$PLATFORM/$PREV_TAG \
                       --platform $PLATFORM \
                       --output ./update-files/$PLATFORM \
-                      --flat-urls || echo "WARNING: Failed to generate patch from $PREV_TAG for $PLATFORM"
+                      --flat-urls
                   else
                     echo "No tar found for $PLATFORM in $PREV_TAG, skipping"
                   fi

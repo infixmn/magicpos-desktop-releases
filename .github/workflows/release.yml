@@ -11,7 +11,7 @@ on:
 
 env:
   NODE_VERSION: '22'
-  CODE_REPO: infixmn/pos.desktop
+  CODE_REPO: infixmn/megacoffee-kiosk
 
 jobs:
   build:
@@ -251,7 +251,7 @@ jobs:
 
           echo "WARNING: Notarization did not complete within 2 hours. Apple's service may be experiencing delays."
           echo "The DMG is still code-signed and will work, but may show a Gatekeeper warning on first launch."
-          echo "You can notarize manually later with: xcrun notarytool submit MagicPos.dmg --apple-id ... --wait"
+          echo "You can notarize manually later with: xcrun notarytool submit MegaCoffee.dmg --apple-id ... --wait"
           exit 0
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -312,48 +312,48 @@ jobs:
           VERSION="${{ github.event.client_payload.version || github.event.inputs.version }}"
           mkdir -p ./release-files
 
-          # Naming convention: MagicPos-{version}-{platform}-{arch}.{ext}
+          # Naming convention: MegaCoffee-{version}-{platform}-{arch}.{ext}
 
           # macOS DMG (arm64 from macos-14 runner)
           DMG=$(find ./artifacts/build-darwin -name "*.dmg" -type f | head -1)
           if [ -n "$DMG" ]; then
-            cp "$DMG" "./release-files/MagicPos-${VERSION}-mac-arm64.dmg"
+            cp "$DMG" "./release-files/MegaCoffee-${VERSION}-mac-arm64.dmg"
           fi
 
           # macOS ZIP
           MAC_ZIP=$(find ./artifacts/build-darwin -name "*.zip" -type f | head -1)
           if [ -n "$MAC_ZIP" ]; then
-            cp "$MAC_ZIP" "./release-files/MagicPos-${VERSION}-mac-arm64.zip"
+            cp "$MAC_ZIP" "./release-files/MegaCoffee-${VERSION}-mac-arm64.zip"
           fi
 
           # Windows EXE (Squirrel installer)
           WIN_EXE=$(find ./artifacts/build-win32 -name "*.exe" -type f | head -1)
           if [ -n "$WIN_EXE" ]; then
-            cp "$WIN_EXE" "./release-files/MagicPos-${VERSION}-win-x64.exe"
+            cp "$WIN_EXE" "./release-files/MegaCoffee-${VERSION}-win-x64.exe"
           fi
 
           # Windows ZIP (portable)
           WIN_ZIP=$(find ./artifacts/build-win32 -name "*.zip" -type f | head -1)
           if [ -n "$WIN_ZIP" ]; then
-            cp "$WIN_ZIP" "./release-files/MagicPos-${VERSION}-win-x64.zip"
+            cp "$WIN_ZIP" "./release-files/MegaCoffee-${VERSION}-win-x64.zip"
           fi
 
           # Linux DEB
           DEB=$(find ./artifacts/build-linux -name "*.deb" -type f | head -1)
           if [ -n "$DEB" ]; then
-            cp "$DEB" "./release-files/MagicPos-${VERSION}-linux-x64.deb"
+            cp "$DEB" "./release-files/MegaCoffee-${VERSION}-linux-x64.deb"
           fi
 
           # Linux AppImage
           APPIMAGE=$(find ./artifacts/build-linux -name "*.AppImage" -type f | head -1)
           if [ -n "$APPIMAGE" ]; then
-            cp "$APPIMAGE" "./release-files/MagicPos-${VERSION}-linux-x64.AppImage"
+            cp "$APPIMAGE" "./release-files/MegaCoffee-${VERSION}-linux-x64.AppImage"
           fi
 
           # Linux ZIP
           LINUX_ZIP=$(find ./artifacts/build-linux -name "*.zip" -type f | head -1)
           if [ -n "$LINUX_ZIP" ]; then
-            cp "$LINUX_ZIP" "./release-files/MagicPos-${VERSION}-linux-x64.zip"
+            cp "$LINUX_ZIP" "./release-files/MegaCoffee-${VERSION}-linux-x64.zip"
           fi
 
           echo "Release files:"
@@ -386,7 +386,7 @@ jobs:
           if [ -n "$WIN_ZIP" ]; then
             unzip -qo "$WIN_ZIP" -d ./new-extracted/win32/ || true
           fi
-          
+
           # Linux ZIP
           LIN_ZIP=$(find ./artifacts/build-linux -name "*.zip" -type f | head -1)
           if [ -n "$LIN_ZIP" ]; then
@@ -416,13 +416,13 @@ jobs:
               if [ -n "$PREV_TAGS" ]; then
                 for PREV_TAG in $PREV_TAGS; do
                   PREV_VER="${PREV_TAG#v}"
-                  # Match new naming: MagicPos-{version}-{platform}-{arch}.tar
+                  # Match new naming: MegaCoffee-{version}-{platform}-{arch}.tar
                   if [ "$PLATFORM" = "darwin" ]; then
-                    OLD_TAR="MagicPos-${PREV_VER}-mac-arm64.tar"
+                    OLD_TAR="MegaCoffee-${PREV_VER}-mac-arm64.tar"
                   elif [ "$PLATFORM" = "win32" ]; then
-                    OLD_TAR="MagicPos-${PREV_VER}-win-x64.tar"
+                    OLD_TAR="MegaCoffee-${PREV_VER}-win-x64.tar"
                   else
-                    OLD_TAR="MagicPos-${PREV_VER}-linux-x64.tar"
+                    OLD_TAR="MegaCoffee-${PREV_VER}-linux-x64.tar"
                   fi
                   mkdir -p ./old-artifacts/$PLATFORM/$PREV_TAG
                   echo "Checking $PREV_TAG for $PLATFORM tar ($OLD_TAR)..."
@@ -489,11 +489,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Notify all POS clients via API
+      - name: Notify all kiosk clients via API
         continue-on-error: true
         run: |
           VERSION="${{ github.event.client_payload.version || github.event.inputs.version }}"
-          echo "Broadcasting update v$VERSION to all POS clients..."
+          echo "Broadcasting update v$VERSION to all kiosk clients..."
 
           RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "${{ vars.VITE_API_URL }}/api/app_updates/broadcast" \
@@ -505,9 +505,9 @@ jobs:
           BODY=$(echo "$RESPONSE" | head -n -1)
 
           if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
-            echo "All POS clients notified of v$VERSION"
+            echo "All kiosk clients notified of v$VERSION"
           else
-            echo "WARNING: Failed to notify POS clients (HTTP $HTTP_CODE)"
+            echo "WARNING: Failed to notify kiosk clients (HTTP $HTTP_CODE)"
             echo "$BODY"
-            echo "POS clients will still pick up the update via hourly polling"
+            echo "Kiosk clients will still pick up the update via hourly polling"
           fi

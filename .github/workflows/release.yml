@@ -159,7 +159,9 @@ jobs:
             --apple-id "$APPLE_ID" \
             --password "$APPLE_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --limit 1 || echo "ERROR: notarytool credentials are invalid!"
+            --output-format json > /tmp/notary-check.json 2>&1 \
+            && echo "notarytool credentials valid" \
+            || { echo "ERROR: notarytool credentials/agreement issue:"; cat /tmp/notary-check.json; }
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}

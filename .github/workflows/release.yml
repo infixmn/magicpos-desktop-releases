@@ -11,7 +11,7 @@ on:
 
 env:
   NODE_VERSION: '22'
-  CODE_REPO: infixmn/pos.desktop
+  CODE_REPO: infixmn/pos-desktop
 
 jobs:
   build:
